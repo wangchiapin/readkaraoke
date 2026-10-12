@@ -133,6 +133,13 @@ details[open]>summary{padding-bottom:12px;margin-bottom:16px;border-bottom:1px s
 #endMenu .primary{border:0;background:var(--ink);color:#fff}
 #endMenu .outline{border:1.5px solid var(--ink);background:var(--field);color:var(--ink)}
 
+/* 浮水印（只在播放畫面出現） */
+#wm{position:fixed;z-index:44;pointer-events:none;white-space:nowrap;font:600 15px var(--latin);letter-spacing:.02em;
+  color:var(--ink);opacity:.55;transition:opacity .35s}
+#wm.fade{opacity:0}
+#wm.corner{right:calc(16px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom))}
+.wmtext{width:100%;margin-top:10px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);padding:10px 12px;font:16px var(--sans)}
+
 /* 讀音面板 */
 #sheet{position:fixed;inset:0;background:rgba(27,40,64,.45);z-index:60;display:flex;align-items:flex-end;justify-content:center}
 .sheet-card{width:100%;max-width:720px;background:var(--bg);border-radius:8px 8px 0 0;padding:20px 22px calc(18px + env(safe-area-inset-bottom));max-height:82vh;overflow:auto}
@@ -231,6 +238,13 @@ details[open]>summary{padding-bottom:12px;margin-bottom:16px;border-bottom:1px s
         <button type="button" data-val="off">單色</button><button type="button" data-val="on">依聲調上色</button>
       </div></div>
     <p class="hint">依聲調上色時，念到的詞改用黃色底標示，字的顏色不變。</p>
+    <div class="group"><span class="lab">浮水印（只在播放畫面出現）</span>
+      <div class="seg" data-key="wm">
+        <button type="button" data-val="off">不要</button><button type="button" data-val="corner">固定右下角</button><button type="button" data-val="move">隨機移動</button>
+      </div>
+      <input class="wmtext" id="wmText" type="text" maxlength="40" autocomplete="off" placeholder="浮水印文字" aria-label="浮水印文字">
+    </div>
+    <p class="hint">隨機移動：每 3 秒換一個位置，只會出現在沒有字的空白處，不會蓋到句子。</p>
   </section>
 
   <section class="card">
@@ -252,6 +266,7 @@ details[open]>summary{padding-bottom:12px;margin-bottom:16px;border-bottom:1px s
 
 <div id="stage" hidden aria-live="off"><div class="text"><div class="inner"></div></div></div>
 <div id="count" hidden></div>
+<div id="wm" hidden></div>
 <div id="endMenu" hidden>
   <button class="primary" id="btnAgain" type="button">再播一次</button>
   <button class="outline" id="btnBack" type="button">回到編輯</button>
@@ -636,7 +651,8 @@ const Engine = (function () {
   const $ = s => document.querySelector(s);
   const KEY = 'readkaraoke.v1';
   const DEFAULTS = { script: 'pinyin', size: 'm', font: 'kai', tonecolor: 'off',
-    d1: 1, d2: 1, d3: 1.5, d4: 2, punct: 0.5, line: 1, count: 3 };
+    d1: 1, d2: 1, d3: 1.5, d4: 2, punct: 0.5, line: 1, count: 3,
+    wm: 'off', wmText: '@cadadiaunosminutos_ben_chino' };
   const LIMITS = { d1: [0.2, 10], d2: [0.2, 10], d3: [0.2, 10], d4: [0.2, 10], punct: [0, 10], line: [0, 10], count: [0, 10] };
   const state = { text: '', custom: '', manual: {}, s: Object.assign({}, DEFAULTS) };
   try {
@@ -801,6 +817,10 @@ const Engine = (function () {
     input.addEventListener('change', () => { const v = parseFloat(input.value.replace(',', '.')); if (isNaN(v)) input.value = fmt(state.s[key]); else set(v); });
   });
 
+  const wmText = $('#wmText');
+  wmText.value = state.s.wmText;
+  wmText.addEventListener('input', () => { state.s.wmText = wmText.value; save(); });
+
   /* ---------- 簡繁轉換 ---------- */
   let toTrad = null;
   function loadTrad() {
@@ -899,6 +919,49 @@ const Engine = (function () {
   async function keepAwake() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} }
   function releaseAwake() { try { if (wakeLock) wakeLock.release(); } catch (e) {} wakeLock = null; }
 
+  /* 浮水印 */
+  const wm = $('#wm');
+  let wmTimer = 0;
+  function wmFree(x, y, w, h) {
+    const pad = 10;
+    const rects = Array.from(stage.querySelectorAll('.ln:not(.blank)')).map(l => l.getBoundingClientRect());
+    if (!endMenu.hidden) rects.push(endMenu.getBoundingClientRect());
+    return !rects.some(r => x < r.right + pad && x + w > r.left - pad && y < r.bottom + pad && y + h > r.top - pad);
+  }
+  function wmPlace() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const w = wm.offsetWidth, h = wm.offsetHeight, m = 14;
+    if (w + m * 2 > vw) { wm.style.left = m + 'px'; wm.style.top = (vh - h - m) + 'px'; return; }
+    let best = null;
+    for (let k = 0; k < 60; k++) {
+      // 上方留 50px，避開 iPhone 的狀態列和動態島
+      const x = m + Math.random() * (vw - w - m * 2), y = 50 + Math.random() * Math.max(0, vh - h - m - 50);
+      if (wmFree(x, y, w, h)) { best = [x, y]; break; }
+    }
+    if (!best) {
+      // 找不到空位：試四個角落，都不行就放右下角
+      const corners = [[vw - w - m, vh - h - m], [m, vh - h - m], [vw - w - m, 50], [m, 50]];
+      best = corners.find(c => wmFree(c[0], c[1], w, h)) || corners[0];
+    }
+    wm.style.left = Math.round(best[0]) + 'px'; wm.style.top = Math.round(best[1]) + 'px';
+  }
+  function wmStart() {
+    clearInterval(wmTimer);
+    const text = (state.s.wmText || '').trim();
+    if (state.s.wm === 'off' || !text) { wm.hidden = true; return; }
+    wm.textContent = text; wm.hidden = false;
+    wm.classList.toggle('corner', state.s.wm === 'corner');
+    wm.style.left = wm.style.top = '';
+    if (state.s.wm === 'move') {
+      wm.classList.remove('fade'); wmPlace();
+      wmTimer = setInterval(() => {
+        wm.classList.add('fade');
+        setTimeout(() => { wmPlace(); wm.classList.remove('fade'); }, 350);
+      }, 3000);
+    }
+  }
+  function wmStop() { clearInterval(wmTimer); wm.hidden = true; }
+
   function fitCheck() {
     const t = stage.querySelector('.text');
     t.classList.add('fits');
@@ -920,6 +983,7 @@ const Engine = (function () {
     const words = Array.from(stage.querySelectorAll('.w'));
     if (!fits && words[0]) words[0].scrollIntoView({ block: 'center' });
     keepAwake();
+    wmStart();
     play = { timers: [], ended: false };
     const n = Math.round(state.s.count);
     // 倒數
@@ -948,6 +1012,7 @@ const Engine = (function () {
   function stop() {
     if (play) play.timers.forEach(clearTimeout);
     play = null; count.hidden = true; endMenu.hidden = true; stage.hidden = true; document.body.style.overflow = '';
+    wmStop();
     releaseAwake();
   }
   $('#btnStart').onclick = start;
