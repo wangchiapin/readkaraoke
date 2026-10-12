@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F5F3EF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="朗讀反紅">
+<meta name="description" content="輸入中文、用空格分詞，逐詞反紅並顯示台灣讀音拼音或注音，搭配螢幕錄影錄下朗讀影片。">
+<title>朗讀反紅</title>
+<style>
+:root{
+  --bg:#F5F3EF; --panel:#ECE7E0; --field:#FBFAF7; --line:#D8D1C5; --rule:#CFC6B8;
+  --ink:#26354F; --ink-d:#1B2840; --body:#5A6270; --muted:#8B9099;
+  --accent:#B0532E; --hl:#D0312D; --hl-bg:#FFE7A3;
+  --sans:"PingFang TC","Noto Sans TC","Microsoft JhengHei","Noto Sans CJK TC",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --latin:"Avenir Next","Helvetica Neue","Segoe UI",Arial,sans-serif;
+  --kai:"Kaiti TC","BiauKai","DFKai-SB","標楷體","KaiTi","STKaiti","Noto Serif TC","Noto Serif CJK TC",serif;
+  --pyf:"Segoe UI","Helvetica Neue","Noto Sans","Arial",sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html{background:var(--bg)}
+body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--bg);
+  padding:0 0 calc(110px + env(safe-area-inset-bottom));line-height:1.6;-webkit-text-size-adjust:100%}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+
+header{padding:calc(32px + env(safe-area-inset-top)) 0 4px}
+.eyebrow{margin:0 0 14px;font-size:13.5px;letter-spacing:.22em;color:var(--body)}
+h1{margin:0;font-size:40px;line-height:1.2;font-weight:800;letter-spacing:.02em}
+h1 em{font-style:normal;color:var(--accent)}
+.lead{margin:14px 0 0;font-size:15.5px;line-height:1.9;color:var(--body)}
+
+.card{background:var(--panel);padding:20px 18px 22px;margin:24px 0 0}
+.card+.card{margin-top:14px}
+.card h2{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0 0 16px;padding-bottom:12px;
+  border-bottom:1px solid var(--rule);font-size:15px;font-weight:600;letter-spacing:.16em;color:var(--body)}
+.card h2 .no{font:400 14px var(--latin);letter-spacing:.08em}
+.hint{font-size:13.5px;line-height:1.8;color:var(--muted);margin:10px 0 0}
+code{background:var(--bg);border:1px solid var(--line);border-radius:3px;padding:0 5px;font-size:12.5px;color:var(--ink)}
+
+textarea{width:100%;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);
+  padding:14px;font:18px/1.8 var(--sans);resize:vertical;min-height:130px}
+textarea:focus,input:focus{outline:2px solid var(--ink);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;margin-top:12px}
+.row-gap{flex:1}
+.mini{border:0;border-bottom:1.5px solid var(--ink);border-radius:0;background:none;color:var(--ink);
+  padding:6px 0 4px;font:500 15px var(--sans);min-height:36px;cursor:pointer}
+.mini:active{color:var(--accent);border-color:var(--accent)}
+.mini:disabled{opacity:.45}
+
+.group{margin:16px 0 0}
+.lab{display:block;font-size:13.5px;letter-spacing:.06em;color:var(--body);margin-bottom:8px}
+.seg{display:flex;border:1px solid var(--ink);border-radius:4px;overflow:hidden;background:var(--field)}
+.seg button{flex:1;border:0;border-left:1px solid var(--ink);background:transparent;color:var(--ink);
+  padding:10px 4px;font:500 14.5px var(--sans);min-height:44px;cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff;font-weight:700}
+
+/* 秒數設定 */
+.times{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.num{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--field);border:1px solid var(--line);border-radius:4px;padding:6px 8px 6px 12px}
+.num span{font-size:14.5px;color:var(--ink)}
+.num .ctl{display:flex;align-items:center;gap:4px}
+.num button{width:36px;height:36px;border:1px solid var(--ink);background:var(--field);color:var(--ink);border-radius:4px;font:700 18px var(--sans);cursor:pointer}
+.num input{width:52px;text-align:center;border:0;background:transparent;font:700 17px var(--latin);color:var(--ink);-moz-appearance:textfield}
+.num input::-webkit-outer-spin-button,.num input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.num small{font-size:12px;color:var(--muted)}
+
+/* 逐詞文字（預覽與播放共用） */
+.text{font-family:var(--kai);color:var(--ink)}
+.text.hei{font-family:var(--sans)}
+.text .ln{display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:.32em;row-gap:.25em}
+.text .ln+.ln{margin-top:.55em}
+.text .ln.blank{height:.6em}
+.w{display:inline-flex;align-items:flex-end;white-space:nowrap;border-radius:.12em;padding:0 .04em;transition:color .08s,background-color .08s}
+.c{display:inline-flex;flex-direction:column;align-items:center;line-height:1}
+.c .p{font-family:var(--pyf);font-size:.42em;line-height:1.25;margin-bottom:.12em;color:var(--accent);white-space:nowrap}
+.c .h{font-size:1em;line-height:1.1}
+.c.pu .h, .c.la .h{line-height:1.1}
+.c.la .h{font-family:var(--pyf);font-size:.8em}
+/* 注音：直排在字右邊 */
+.c.zy{flex-direction:row;align-items:center}
+.zc{position:relative;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:1em;margin:0 .62em 0 .08em;
+  font-family:var(--kai);font-size:.46em;line-height:1;color:var(--accent)}
+.text.hei .zc{font-family:var(--sans)}
+.zc .zs{display:block;height:.84em;line-height:.84em}
+.zc .zt{position:absolute;right:-.68em;font-size:.95em}
+.zc .zd{display:block;height:.55em;line-height:.55em;text-align:center}
+/* 反紅 */
+.w.on, .w.on .p, .w.on .zc{color:var(--hl)}
+.toneOn .w.on{color:inherit;background:var(--hl-bg)}
+.toneOn .w.on .p, .toneOn .w.on .zc{color:inherit}
+.toneOn .t1{color:#D23A2E!important} .toneOn .t2{color:#E08A00!important} .toneOn .t3{color:#2E8B3E!important}
+.toneOn .t4{color:#2F5FC4!important} .toneOn .t5{color:#8A8A8A!important}
+
+#preview{background:var(--field);border:1px solid var(--line);padding:18px 14px;font-size:var(--fs,34px);min-height:110px}
+#preview .c[data-k]{cursor:pointer}
+#empty{font:15px/1.8 var(--sans);color:var(--muted);text-align:center;padding:16px 0}
+.reset-line{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;font-size:13.5px;color:var(--muted)}
+
+details>summary{cursor:pointer;display:flex;justify-content:space-between;align-items:baseline;list-style:none;
+  font-size:15px;font-weight:600;letter-spacing:.16em;color:var(--body)}
+details>summary::-webkit-details-marker{display:none}
+details>summary .no{font:400 14px var(--latin);letter-spacing:.08em}
+details>summary .no::after{content:" ＋";color:var(--ink)}
+details[open]>summary .no::after{content:" －"}
+details[open]>summary{padding-bottom:12px;margin-bottom:16px;border-bottom:1px solid var(--rule)}
+#ruleMsg{font-size:13.5px;color:var(--muted);margin-top:8px}
+#ruleMsg.bad{color:var(--accent)}
+
+/* 底部 */
+.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(245,243,239,.97);backdrop-filter:blur(6px);
+  border-top:1px solid var(--rule);padding:12px 20px calc(12px + env(safe-area-inset-bottom));z-index:5}
+.bar .in{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:14px}
+#total{flex:1;font-size:14px;color:var(--body);line-height:1.4}
+#total b{font:700 20px var(--latin);color:var(--ink)}
+.btn{border:0;border-radius:4px;min-height:54px;padding:0 34px;font:700 18px var(--sans);letter-spacing:.1em;background:var(--ink);color:#fff;cursor:pointer}
+.btn:active{background:var(--ink-d)}
+.btn:disabled{opacity:.35}
+
+/* 播放畫面 */
+#stage{position:fixed;inset:0;z-index:40;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:calc(28px + env(safe-area-inset-top)) calc(22px + env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) calc(22px + env(safe-area-inset-left))}
+#stage .text{font-size:var(--pfs,40px);min-height:100%;display:flex;flex-direction:column;justify-content:center}
+#stage .text .inner{padding:30vh 0}
+#stage .text.fits .inner{padding:0}
+#count{position:fixed;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;pointer-events:none;
+  font:800 min(40vw,40vh)/1 var(--latin);color:var(--ink);opacity:.9}
+#endMenu{position:fixed;left:0;right:0;bottom:0;z-index:46;display:flex;gap:10px;justify-content:center;
+  padding:16px 20px calc(16px + env(safe-area-inset-bottom));background:rgba(245,243,239,.96);border-top:1px solid var(--rule)}
+#endMenu button{min-height:50px;padding:0 22px;border-radius:4px;font:700 16px var(--sans);cursor:pointer}
+#endMenu .primary{border:0;background:var(--ink);color:#fff}
+#endMenu .outline{border:1.5px solid var(--ink);background:var(--field);color:var(--ink)}
+
+/* 讀音面板 */
+#sheet{position:fixed;inset:0;background:rgba(27,40,64,.45);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+.sheet-card{width:100%;max-width:720px;background:var(--bg);border-radius:8px 8px 0 0;padding:20px 22px calc(18px + env(safe-area-inset-bottom));max-height:82vh;overflow:auto}
+.sheet-head{display:flex;align-items:baseline;gap:14px;padding-bottom:12px;border-bottom:1px solid var(--rule)}
+#shChar{font:800 46px/1 var(--sans)}
+#shCur{font-size:21px;color:var(--accent);font-weight:700}
+#shCands{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 6px}
+#shCands button{border:1px solid var(--ink);background:var(--field);border-radius:4px;min-width:68px;min-height:48px;padding:6px 14px;font:600 20px var(--sans);color:var(--ink);cursor:pointer}
+#shCands button.on{background:var(--ink);color:#fff}
+#shCands button small{display:block;font:500 12px var(--sans);opacity:.75;margin-top:1px}
+.typein{display:flex;gap:8px;margin:14px 0 6px}
+.typein input{flex:1;min-width:0;border:1px solid var(--line);border-radius:4px;padding:10px 12px;font:600 20px var(--sans);color:var(--ink);background:var(--field)}
+.typein input.bad{border-color:var(--accent)}
+.typein button{border:0;border-radius:4px;padding:0 20px;min-height:48px;font:700 16px var(--sans);color:#fff;background:var(--ink);cursor:pointer}
+.typein button:disabled{opacity:.35}
+#shPreview{font-size:13.5px;color:var(--muted);min-height:1.5em}
+#shPreview b{color:var(--accent);font-size:18px}
+.check{display:flex;gap:10px;align-items:center;font-size:14.5px;margin-top:14px}
+.check input{width:20px;height:20px;accent-color:var(--ink)}
+.sheet-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px}
+
+#toast{position:fixed;left:50%;bottom:calc(100px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(10px);
+  background:var(--ink);color:#fff;padding:10px 18px;border-radius:4px;font-size:14px;opacity:0;pointer-events:none;
+  transition:opacity .2s,transform .2s;z-index:70;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width:540px){ .times{grid-template-columns:1fr} }
+@media (max-width:380px){ h1{font-size:34px} .wrap{padding:0 16px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">錄影用的逐詞反紅工具</p>
+    <h1>朗讀<em>反紅</em>。</h1>
+    <p class="lead">用空格把詞分開，按開始後每個詞依序變紅。<br>打開 iPhone 螢幕錄影，跟著紅字念就能錄成影片。</p>
+  </header>
+
+  <section class="card">
+    <h2><span>輸入中文</span><span class="no">01 / 05</span></h2>
+    <textarea id="src" rows="4" placeholder="用空格分詞，例如：&#10;我 是 學生，你 呢？&#10;今天 天氣 很 好。" aria-label="輸入中文"></textarea>
+    <p class="hint">空格分開的就是一個詞；標點跟著前一個詞。按 Enter 換行，播放時換行會多停一下。</p>
+    <div class="row">
+      <button class="mini" id="btnSample" type="button">範例</button>
+      <button class="mini" id="btnClear" type="button">清除</button>
+      <span class="row-gap"></span>
+      <button class="mini" id="btnToTrad" type="button">轉成繁體</button>
+      <button class="mini" id="btnToSimp" type="button">转成简体</button>
+    </div>
+    <div class="group"><span class="lab">標音方式</span>
+      <div class="seg" data-key="script">
+        <button type="button" data-val="pinyin">拼音</button><button type="button" data-val="zhuyin">注音</button>
+      </div></div>
+  </section>
+
+  <section class="card">
+    <h2><span>預覽</span><span class="no">02 / 05</span></h2>
+    <div id="preview" class="text"><div id="empty">在上面輸入中文，這裡會顯示分好的詞和讀音。</div></div>
+    <p class="hint">讀音不對？點那個字，換成正確的讀音。</p>
+    <div class="reset-line" id="resetLine" hidden>
+      <span id="resetInfo"></span>
+      <button class="mini" id="btnResetManual" type="button">全部還原</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span>時間設定</span><span class="no">03 / 05</span></h2>
+    <span class="lab">每個詞停留幾秒（依詞的字數）</span>
+    <div class="times">
+      <div class="num" data-key="d1"><span>1 個字</span><div class="ctl"><button type="button" data-step="-">−</button><input inputmode="decimal" aria-label="1 個字的秒數"><button type="button" data-step="+">＋</button></div></div>
+      <div class="num" data-key="d2"><span>2 個字</span><div class="ctl"><button type="button" data-step="-">−</button><input inputmode="decimal" aria-label="2 個字的秒數"><button type="button" data-step="+">＋</button></div></div>
+      <div class="num" data-key="d3"><span>3 個字</span><div class="ctl"><button type="button" data-step="-">−</button><input inputmode="decimal" aria-label="3 個字的秒數"><button type="button" data-step="+">＋</button></div></div>
+      <div class="num" data-key="d4"><span>4 個字以上</span><div class="ctl"><button type="button" data-step="-">−</button><input inputmode="decimal" aria-label="4 個字以上的秒數"><button type="button" data-step="+">＋</button></div></div>
+    </div>
+    <span class="lab" style="margin-top:18px">停頓與倒數（秒）</span>
+    <div class="times">
+      <div class="num" data-key="punct"><span>標點後</span><div class="ctl"><button type="button" data-step="-">−</button><input inputmode="decimal" aria-label="標點後多停的秒數"><button type="button" data-step="+">＋</button></div></div>
+      <div class="num" data-key="line"><span>換行後</span><div class="ctl"><button type="button" data-step="-">−</button><input inputmode="decimal" aria-label="換行後多停的秒數"><button type="button" data-step="+">＋</button></div></div>
+      <div class="num" data-key="count"><span>開始前倒數</span><div class="ctl"><button type="button" data-step="-">−</button><input inputmode="decimal" aria-label="開始前倒數秒數"><button type="button" data-step="+">＋</button></div></div>
+    </div>
+    <p class="hint">標點剛好在行尾時，只停換行的時間（取比較長的那個）。</p>
+  </section>
+
+  <section class="card">
+    <h2><span>顯示設定</span><span class="no">04 / 05</span></h2>
+    <div class="group" style="margin-top:0"><span class="lab">字的大小</span>
+      <div class="seg" data-key="size">
+        <button type="button" data-val="s">小</button><button type="button" data-val="m">中</button><button type="button" data-val="l">大</button><button type="button" data-val="xl">特大</button>
+      </div></div>
+    <div class="group"><span class="lab">漢字字體</span>
+      <div class="seg" data-key="font">
+        <button type="button" data-val="kai">楷體</button><button type="button" data-val="hei">黑體</button>
+      </div></div>
+    <div class="group"><span class="lab">拼音／注音顏色</span>
+      <div class="seg" data-key="tonecolor">
+        <button type="button" data-val="off">單色</button><button type="button" data-val="on">依聲調上色</button>
+      </div></div>
+    <p class="hint">依聲調上色時，念到的詞改用黃色底標示，字的顏色不變。</p>
+  </section>
+
+  <section class="card">
+    <details id="rulesBox">
+      <summary><span>自訂讀音規則</span><span class="no">05 / 05</span></summary>
+      <textarea id="custom" rows="4" spellcheck="false" placeholder="垃圾=lè sè&#10;一般=yì bān" aria-label="自訂讀音規則"></textarea>
+      <div id="ruleMsg"></div>
+      <p class="hint">一行一條：<code>詞=拼音</code>，音節用空格分開，聲調可以打數字（<code>le4 se4</code>）。你寫的規則優先於所有內建規則（包括 GoodTeacher 的語境規則）。</p>
+    </details>
+  </section>
+</div>
+
+<div class="bar">
+  <div class="in">
+    <div id="total">共 <b>0</b> 個詞</div>
+    <button class="btn" id="btnStart" type="button" disabled>開始</button>
+  </div>
+</div>
+
+<div id="stage" hidden aria-live="off"><div class="text"><div class="inner"></div></div></div>
+<div id="count" hidden></div>
+<div id="endMenu" hidden>
+  <button class="primary" id="btnAgain" type="button">再播一次</button>
+  <button class="outline" id="btnBack" type="button">回到編輯</button>
+</div>
+
+<div id="sheet" hidden role="dialog" aria-modal="true" aria-label="選擇讀音">
+  <div class="sheet-card">
+    <div class="sheet-head"><span id="shChar"></span><span id="shCur"></span></div>
+    <div id="shCands"></div>
+    <div class="typein">
+      <input id="shInput" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="自己打，例如 wo3" aria-label="自己輸入拼音">
+      <button id="shOk" type="button" disabled>確認</button>
+    </div>
+    <div id="shPreview"></div>
+    <label class="check"><input type="checkbox" id="shAlways"> 之後這個字都這樣讀（存成自訂規則）</label>
+    <div class="sheet-foot">
+      <button class="mini" id="shReset" type="button" hidden>還原預設讀音</button>
+      <button class="mini" id="shClose" type="button" style="margin-left:auto">關閉</button>
+    </div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<script>/*__PINYIN_PRO__*/</script>
+<script>/*__T2CN__*/</script>
+<script>window.__toSimp = OpenCC.Converter({ from: 'tw', to: 'cn' });</script>
+<script>var GT_RULES = /*__GT_RULES__*/null;</script>
+<script>/*__ENGINE__*/</script>
+<script>
+(function () {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const KEY = 'readkaraoke.v1';
+  const DEFAULTS = { script: 'pinyin', size: 'm', font: 'kai', tonecolor: 'off',
+    d1: 1, d2: 1, d3: 1.5, d4: 2, punct: 0.5, line: 1, count: 3 };
+  const LIMITS = { d1: [0.2, 10], d2: [0.2, 10], d3: [0.2, 10], d4: [0.2, 10], punct: [0, 10], line: [0, 10], count: [0, 10] };
+  const state = { text: '', custom: '', manual: {}, s: Object.assign({}, DEFAULTS) };
+  try {
+    const o = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (o) { state.text = o.text || ''; state.custom = o.custom || ''; state.manual = o.manual || {}; Object.assign(state.s, o.s || {}); }
+  } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+  const SAMPLE = '我 是 學生，你 呢？\n今天 天氣 很 好，我們 一起 去 吃飯 吧！\n你 想 喝 珍珠奶茶 還是 咖啡？';
+
+  /* ---------- 把輸入切成 行 → 詞 → 字 ---------- */
+  const HAN = /\p{Script=Han}/u;
+  const WORDY = /[\p{L}\p{N}]/u;
+  const END_PUNCT = /[，。！？、；：,.!?;:…⋯」』）)”’]$/;
+
+  function parse() {
+    const rawLines = state.text.replace(/\r/g, '').split('\n');
+    const lines = [];   // [{ words: [{ chars, han, punct }], blank }]
+    const compact = []; // 去掉空格後的每一行，給讀音引擎看
+    const maps = [];
+    for (const raw of rawLines) {
+      // 空格分詞；另外，詞中間出現句中標點（例如「學生，你」）也當成分界
+      let toks = [];
+      for (const t of raw.split(/[ \t\u3000]+/).filter(Boolean)) toks.push(...t.split(/(?<=[，。！？、；：…⋯](?:[」』）)”’]*))(?=[^，。！？、；：…⋯」』）)”’])/u));
+      // 只有標點的詞，併到前一個詞（開頭的引號、括號就併到後一個詞）
+      const merged = [];
+      let carryOpen = '';
+      for (const t of toks) {
+        if (!WORDY.test(t)) {
+          if (/^[「『（(“‘《〈]+$/.test(t)) { carryOpen += t; continue; }
+          if (merged.length) { merged[merged.length - 1] += t; continue; }
+        }
+        merged.push(carryOpen + t); carryOpen = '';
+      }
+      if (carryOpen) { if (merged.length) merged[merged.length - 1] += carryOpen; else merged.push(carryOpen); }
+      // 組成給引擎的字串：漢字之間不留空格，英文字之間保留一個空格
+      let str = '', ranges = [];
+      merged.forEach((t, i) => {
+        if (i && WORDY.test(str.slice(-1)) && !HAN.test(str.slice(-1)) && WORDY.test(t[0]) && !HAN.test(t[0])) str += ' ';
+        const start = Array.from(str).length;
+        str += t;
+        ranges.push([start, Array.from(str).length]);
+      });
+      compact.push(str); maps.push({ merged, ranges });
+    }
+    const analysis = Engine.analyze(compact.join('\n'), state.custom, state.manual);
+    analysis.lines.forEach((units, li) => {
+      const { merged, ranges } = maps[li];
+      if (!merged.length) { lines.push({ blank: true, words: [] }); return; }
+      const words = merged.map(t => ({ text: t, units: [] }));
+      let pos = 0, wi = 0;
+      for (const u of units) {
+        const len = Array.from(u.text).length;
+        while (wi < ranges.length && pos >= ranges[wi][1]) wi++;
+        if (u.kind !== 'space' && wi < ranges.length && pos >= ranges[wi][0]) words[wi].units.push(u);
+        pos += len;
+      }
+      for (const w of words) {
+        w.han = w.units.filter(u => u.kind === 'han').length;
+        w.n = w.han || (w.units.some(u => u.kind === 'latin') ? 1 : 0);
+        w.punct = END_PUNCT.test(w.text);
+      }
+      lines.push({ words: words.filter(w => w.units.length) });
+    });
+    return { lines, rules: analysis.rules };
+  }
+
+  /* ---------- 畫出文字（預覽與播放共用） ---------- */
+  function esc(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  function charHTML(u, clickable) {
+    if (u.kind !== 'han') return `<span class="c ${u.kind === 'latin' ? 'la' : 'pu'}"><span class="h">${esc(u.text)}</span></span>`;
+    const tone = Engine.toneOf(u.py) || 5;
+    const k = clickable ? ` data-k="${esc(u.ctx)}" data-ch="${esc(u.text)}" data-py="${esc(u.py || '')}"` : '';
+    if (state.s.script === 'zhuyin') {
+      const z = Engine.toZhuyin(u.py);
+      if (z) {
+        const syms = z.syms.map(c => `<span class="zs">${c}</span>`).join('');
+        const dot = z.tone === 5 ? '<span class="zd">˙</span>' : '';
+        const tm = (z.tone >= 2 && z.tone <= 4) ? `<span class="zt" style="top:${z.syms.length === 1 ? 0 : ((z.syms.length - 1) * 0.84 - 0.45).toFixed(2)}em">${'ˊˇˋ'[z.tone - 2]}</span>` : '';
+        return `<span class="c zy"${k}><span class="h">${esc(u.text)}</span><span class="zc t${tone}">${dot}${syms}${tm}</span></span>`;
+      }
+    }
+    return `<span class="c"${k}><span class="p t${tone}">${esc(u.py || ' ')}</span><span class="h">${esc(u.text)}</span></span>`;
+  }
+  function textHTML(parsed, clickable) {
+    let wi = 0;
+    return parsed.lines.map(l => l.blank ? '<div class="ln blank"></div>' :
+      '<div class="ln">' + l.words.map(w => `<span class="w" data-i="${wi++}">${w.units.map(u => charHTML(u, clickable)).join('')}</span>`).join('') + '</div>'
+    ).join('');
+  }
+  const SIZES = { s: 26, m: 34, l: 44, xl: 56 };
+  function applyLook(el) {
+    el.classList.toggle('hei', state.s.font === 'hei');
+    el.classList.toggle('toneOn', state.s.tonecolor === 'on');
+  }
+
+  /* ---------- 時間表 ---------- */
+  function schedule(parsed) {
+    const s = state.s, out = [];   // [{ i, start, dur }]
+    let t = 0, i = 0;
+    const flat = [];
+    parsed.lines.forEach((l, li) => l.words.forEach((w, k) => flat.push({ w, lineEnd: k === l.words.length - 1, li })));
+    flat.forEach((f, idx) => {
+      const n = f.w.n;
+      const dur = n >= 4 ? s.d4 : n === 3 ? s.d3 : n === 2 ? s.d2 : s.d1;
+      out.push({ i: i++, start: t, dur });
+      t += dur;
+      if (idx < flat.length - 1) {
+        const nextLine = flat[idx + 1].li !== f.li;
+        t += nextLine ? Math.max(s.line, f.w.punct ? s.punct : 0) : (f.w.punct ? s.punct : 0);
+      }
+    });
+    return { items: out, total: t };
+  }
+
+  /* ---------- 編輯畫面 ---------- */
+  let parsed = null;
+  function render() {
+    parsed = parse();
+    const pv = $('#preview');
+    pv.style.setProperty('--fs', SIZES[state.s.size] * 0.85 + 'px');
+    applyLook(pv);
+    const empty = !parsed.lines.some(l => l.words && l.words.length);
+    pv.innerHTML = empty ? '<div id="empty">在上面輸入中文，這裡會顯示分好的詞和讀音。</div>' : textHTML(parsed, true);
+    const n = Object.keys(state.manual).length;
+    $('#resetLine').hidden = !n;
+    $('#resetInfo').textContent = '已手動修改 ' + n + ' 處讀音';
+    const sc = schedule(parsed);
+    const words = sc.items.length;
+    $('#total').innerHTML = words ? `共 <b>${words}</b> 個詞・約 <b>${Math.round(sc.total + state.s.count)}</b> 秒` : '共 <b>0</b> 個詞';
+    $('#btnStart').disabled = !words;
+    const bad = parsed.rules.errors;
+    const rm = $('#ruleMsg');
+    if (bad.length) { rm.className = 'bad'; rm.textContent = '有 ' + bad.length + ' 行格式不對：' + bad.slice(0, 2).join(' ／ '); }
+    else { rm.className = ''; rm.textContent = parsed.rules.customCount ? '已套用 ' + parsed.rules.customCount + ' 條自訂規則' : ''; }
+  }
+  let timer = 0;
+  const later = () => { clearTimeout(timer); timer = setTimeout(render, 150); };
+
+  const src = $('#src'), custom = $('#custom');
+  src.value = state.text; custom.value = state.custom;
+  if (state.custom.trim()) $('#rulesBox').open = true;
+  src.addEventListener('input', () => { state.text = src.value; save(); later(); });
+  custom.addEventListener('input', () => { state.custom = custom.value; save(); later(); });
+  $('#btnSample').onclick = () => { src.value = SAMPLE; state.text = SAMPLE; save(); render(); };
+  $('#btnClear').onclick = () => { src.value = ''; state.text = ''; save(); render(); src.focus(); };
+  $('#btnResetManual').onclick = () => { state.manual = {}; save(); render(); toast('已還原全部手動修改'); };
+
+  document.querySelectorAll('.seg').forEach(seg => {
+    const key = seg.dataset.key;
+    const sync = () => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(String(state.s[key]) === b.dataset.val)));
+    seg.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.s[key] = b.dataset.val; save(); sync(); render(); });
+    sync();
+  });
+
+  // 秒數欄位：± 每次 0.5 秒，也可以直接輸入
+  document.querySelectorAll('.num').forEach(box => {
+    const key = box.dataset.key, input = box.querySelector('input'), [lo, hi] = LIMITS[key];
+    const fmt = v => String(Math.round(v * 10) / 10);
+    const set = v => { v = Math.min(hi, Math.max(lo, Math.round(v * 10) / 10)); state.s[key] = v; input.value = fmt(v); save(); render(); };
+    input.value = fmt(state.s[key]);
+    box.querySelectorAll('button').forEach(b => b.onclick = () => set(state.s[key] + (b.dataset.step === '+' ? 0.5 : -0.5)));
+    input.addEventListener('change', () => { const v = parseFloat(input.value.replace(',', '.')); if (isNaN(v)) input.value = fmt(state.s[key]); else set(v); });
+  });
+
+  /* ---------- 簡繁轉換 ---------- */
+  let toTrad = null;
+  function loadTrad() {
+    if (toTrad) return Promise.resolve(toTrad);
+    return new Promise((resolve, reject) => {
+      const el = document.createElement('script');
+      el.src = 'opencc-cn2t.js';
+      el.onload = () => { try { toTrad = OpenCC.Converter({ from: 'cn', to: 'tw' }); resolve(toTrad); } catch (e) { reject(e); } };
+      el.onerror = reject;
+      document.head.appendChild(el);
+    });
+  }
+  function applyConverted(out, done, same) {
+    if (out === src.value) { toast(same); return; }
+    src.value = out; state.text = out; save(); render(); toast(done);
+  }
+  $('#btnToSimp').onclick = () => { if (src.value.trim()) applyConverted(window.__toSimp(src.value), '已轉成簡體', '已經是簡體了'); };
+  $('#btnToTrad').onclick = async () => {
+    if (!src.value.trim()) return;
+    const b = $('#btnToTrad'), label = b.textContent; b.disabled = true;
+    if (!toTrad) b.textContent = '載入中…';
+    try {
+      const c = await loadTrad();
+      const before = Array.from(src.value), after = Array.from(c(src.value));
+      if (before.length === after.length) for (let i = 0; i < after.length; i++) if (before[i] === '台' && after[i] === '臺') after[i] = '台';
+      applyConverted(after.join(''), '已轉成繁體', '已經是繁體了');
+    } catch (e) { toast('轉換失敗，請確認有連上網路'); }
+    finally { b.disabled = false; b.textContent = label; }
+  };
+
+  /* ---------- 點字換讀音 ---------- */
+  let cur = null;
+  $('#preview').addEventListener('click', e => {
+    const c = e.target.closest('.c[data-k]');
+    if (c) openSheet({ ctx: c.dataset.k, text: c.dataset.ch, py: c.dataset.py });
+  });
+  const shInput = $('#shInput'), shOk = $('#shOk'), shPreview = $('#shPreview');
+  const HINT = '數字代表聲調：1 2 3 4，輕聲打 5 或不打；ü 用 v（nv3 → nǚ）';
+  function openSheet(u) {
+    cur = u;
+    const zyMode = state.s.script === 'zhuyin';
+    const label = py => { const z = zyMode && Engine.toZhuyin(py); return z ? z.text + '　' + py : py; };
+    $('#shChar').textContent = u.text;
+    $('#shCur').textContent = u.py ? label(u.py) : '（沒有讀音）';
+    const box = $('#shCands'); box.innerHTML = '';
+    Engine.candidates(u.text, u.py).forEach(c => {
+      const b = document.createElement('button'); b.type = 'button';
+      const z = zyMode && Engine.toZhuyin(c);
+      if (z) { b.textContent = z.text; const sm = document.createElement('small'); sm.textContent = c; b.appendChild(sm); }
+      else b.textContent = c;
+      if (c === u.py) b.className = 'on';
+      b.onclick = () => choose(c);
+      box.appendChild(b);
+    });
+    $('#shReset').hidden = !state.manual[u.ctx];
+    $('#shAlways').checked = false;
+    shInput.value = ''; updateTyped();
+    $('#sheet').hidden = false;
+  }
+  const closeSheet = () => { shInput.blur(); $('#sheet').hidden = true; cur = null; };
+  function choose(c) {
+    if (!cur) return;
+    if ($('#shAlways').checked) {
+      const ls = custom.value.split('\n').filter(l => !l.trim().startsWith(cur.text + '='));
+      ls.push(cur.text + '=' + c);
+      custom.value = ls.filter(l => l.trim()).join('\n'); state.custom = custom.value;
+      delete state.manual[cur.ctx]; $('#rulesBox').open = true;
+    } else state.manual[cur.ctx] = c;
+    save(); closeSheet(); render();
+  }
+  function typedPinyin() {
+    const raw = shInput.value.trim().toLowerCase().replace(/\s+/g, '');
+    if (!raw) return { raw, ok: false };
+    const py = Engine.numToMark(raw), b = Engine.stripTone(py);
+    return { raw, py, ok: /^[a-zü]{1,6}$/.test(b) && /[aeiouünm]/.test(b) && !/\d/.test(py) };
+  }
+  function updateTyped() {
+    const t = typedPinyin();
+    shOk.disabled = !t.ok;
+    shInput.classList.toggle('bad', !!t.raw && !t.ok);
+    if (!t.raw) shPreview.textContent = HINT;
+    else if (t.ok) { const z = Engine.toZhuyin(t.py); shPreview.innerHTML = '會變成：<b>' + t.py + '</b>' + (z ? '（' + z.text + '）' : ''); }
+    else shPreview.textContent = '格式不對：一次打一個字的拼音，聲調數字放最後，例如 hao3';
+  }
+  shInput.addEventListener('input', updateTyped);
+  shInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!shOk.disabled) shOk.click(); } });
+  shOk.onclick = () => { const t = typedPinyin(); if (t.ok) choose(t.py); };
+  $('#shClose').onclick = closeSheet;
+  $('#shReset').onclick = () => { if (cur) { delete state.manual[cur.ctx]; save(); closeSheet(); render(); } };
+  $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
+
+  /* ---------- 播放 ---------- */
+  const stage = $('#stage'), count = $('#count'), endMenu = $('#endMenu');
+  let play = null;   // { timers, raf, ended }
+  let wakeLock = null;
+  async function keepAwake() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+  function releaseAwake() { try { if (wakeLock) wakeLock.release(); } catch (e) {} wakeLock = null; }
+
+  function fitCheck() {
+    const t = stage.querySelector('.text');
+    t.classList.add('fits');
+    const fits = t.querySelector('.inner').scrollHeight <= stage.clientHeight - 40;
+    t.classList.toggle('fits', fits);
+    return fits;
+  }
+  function start() {
+    if (!parsed) render();
+    const sc = schedule(parsed);
+    if (!sc.items.length) return;
+    const t = stage.querySelector('.text');
+    t.style.setProperty('--pfs', SIZES[state.s.size] * 1.15 + 'px');
+    applyLook(t);
+    t.querySelector('.inner').innerHTML = textHTML(parsed, false);
+    stage.hidden = false; endMenu.hidden = true; document.body.style.overflow = 'hidden';
+    stage.scrollTop = 0;
+    const fits = fitCheck();
+    const words = Array.from(stage.querySelectorAll('.w'));
+    if (!fits && words[0]) words[0].scrollIntoView({ block: 'center' });
+    keepAwake();
+    play = { timers: [], ended: false };
+    const n = Math.round(state.s.count);
+    // 倒數
+    const startAt = performance.now() + n * 1000;
+    if (n > 0) {
+      count.hidden = false;
+      for (let k = 0; k < n; k++) play.timers.push(setTimeout(() => { count.textContent = String(n - k); }, k * 1000));
+      count.textContent = String(n);
+      play.timers.push(setTimeout(() => { count.hidden = true; }, n * 1000));
+    }
+    // 逐詞反紅（以開始時間為基準計算，避免累積誤差）
+    sc.items.forEach(it => {
+      const fire = () => {
+        const w = words[it.i]; if (!w) return;
+        w.classList.add('on');
+        if (!fits) {
+          const r = w.getBoundingClientRect(), vh = stage.clientHeight;
+          if (r.top < vh * 0.25 || r.bottom > vh * 0.7) w.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      };
+      play.timers.push(setTimeout(fire, Math.max(0, startAt + it.start * 1000 - performance.now())));
+    });
+    const last = sc.items[sc.items.length - 1];
+    play.timers.push(setTimeout(() => { play.ended = true; releaseAwake(); }, Math.max(0, startAt + (last.start + last.dur) * 1000 - performance.now())));
+  }
+  function stop() {
+    if (play) play.timers.forEach(clearTimeout);
+    play = null; count.hidden = true; endMenu.hidden = true; stage.hidden = true; document.body.style.overflow = '';
+    releaseAwake();
+  }
+  $('#btnStart').onclick = start;
+  // 播放中點畫面＝停止；播完點畫面＝顯示選單
+  stage.addEventListener('click', () => {
+    if (!play) return;
+    if (play.ended) endMenu.hidden = !endMenu.hidden;
+    else stop();
+  });
+  $('#btnAgain').onclick = () => { stop(); start(); };
+  $('#btnBack').onclick = stop;
+  window.addEventListener('resize', () => { if (!stage.hidden) fitCheck(); });
+
+  /* ---------- 其他 ---------- */
+  let tt = 0;
+  function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2200); }
+
+  render();
+  window.__rk = { state, parse, schedule, start, stop };
+})();
+</script>
+</body>
+</html>
